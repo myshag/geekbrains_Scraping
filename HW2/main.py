@@ -6,6 +6,7 @@ from pprint import pprint
 import re
 from pymongo import MongoClient
 from pprint import pprint
+from datetime import datetime
 
 
 url = "https://hh.ru"
@@ -24,7 +25,7 @@ headers = {
 }
 
 
-def getBD(bdname:str,ip:str="127.0.0.1",port:int=27017):
+def getDB(bdname:str,ip:str="127.0.0.1",port:int=27017):
     client = MongoClient(ip, port)
     return client[bdname]
 
@@ -44,29 +45,57 @@ def parse(pageDOM):
         requirements = item.find("div", attrs={"data-qa": "vacancy-serp__vacancy_snippet_requirement"})
         compensation = item.find("span", attrs={"data-qa": "vacancy-serp__vacancy-compensation"})
 
-        # el['vacancyName'] = vacancyName.text
-        # el['employer_name'] = employer_name.text
-        # el['employer_link'] = url+employer_name.attrs['href']
-        # el['employer_HHid'] = int(employer_name.attrs['href'].split("/")[2])
+        el['vacancyName'] = vacancyName.text
+        el['employer_name'] = employer_name.text
+        el['employer_link'] = url+employer_name.attrs['href']
+        #el['employer_HHid'] = int(employer_name.attrs['href'].split("/")[2])
 
-        # el['address'] = address.text
-        # el['responsibility'] = responsibility.text
-        # compensation_arr = str("".join(compensation.text.split()))
+        el['address'] = address.text
+        el['responsibility'] = responsibility.text
 
-        el['compensation'] = compensation
 
-        if not el['compensation'] is None:
-            el['compensation'] = el['compensation'].replace("\u202f", "")
 
-        # el['compensation'] = compensation_arr.split("от")
 
-        # if requirements is not None:
-        #     el['requirements'] = requirements.text
-        # else:
-        #     el['requirements'] = None
+        if not compensation is None:
+            compensation_text = compensation.text
+            compensation_text = compensation_text.replace("\u202f", "")
+            compensation_text = compensation_text.split()
+            #print(compensation_text)
+            if compensation_text[0] == 'от':
+                # noinspection PyTypedDict
+                el['compensation'] = {
+                    "min":  int(compensation_text[1]),
+                    "max": None,
+                    "currency":compensation_text[2]
+                }
+            elif compensation_text[0] == 'до':
+                # noinspection PyTypedDict
+                el['compensation'] = {
+                    "min": None,
+                    "max": int(compensation_text[1]),
+                    "currency": compensation_text[2]
+                }
+            elif compensation_text[0].isdigit():
+                el['compensation'] = {
+                    "min": int(compensation_text[0]),
+                    "max": int(compensation_text[2]),
+                    "currency": compensation_text[3]
+                }
+            #pprint(el['compensation'])
+
+
+        if requirements is not None:
+             el['requirements'] = requirements.text
+        else:
+             el['requirements'] = None
 
         results_list.append(el)
     return results_list
+
+db=getDB("hhru_vacancy")
+
+
+vacancy_collect = db[f"vacancy_collect__{datetime.now()}"]
 
 while True:
     result = requests.get(url + "/search/vacancy", params=parameters, headers=headers)
@@ -77,10 +106,10 @@ while True:
     print(f"Parsing page: {parameters['page']}")
     dom = BeautifulSoup(result.text, 'html.parser')
     pageNextButton = dom.find("a", attrs={"class": "bloko-button","data-qa":"pager-next"})
-
     vacancy_list_dict = parse(dom)
-    dbVacancy_list
 
+    for vacancy in vacancy_list_dict:
+        vacancy_collect.posts.insert_one(vacancy)
 
     if pageNextButton is None:
         break
