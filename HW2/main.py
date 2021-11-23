@@ -127,8 +127,10 @@ while True:
         break
     parameters['page'] += 1
 
-
-
 #pprint(results_list)
-
-print()
+#({'Date':{"$gte":'ISODate("'date1')"'}}):
+min_compensation = input("Введите значение зарплаты: ")
+items=vacancy_collect.find({'$and':[{'compensation.max':{"$gte":140000}},
+                                    {'compensation.min':{"$gte":140000}}]})
+for item in items:
+    pprint(item)
