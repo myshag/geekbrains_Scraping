@@ -14,7 +14,7 @@ parameters = {
     "L_profession_id": "5.2",  # required  parameter for search  results
     "area": "113",  # default area to search
     "no_magic": "true",
-    "text": "Продавец-кассир",
+    #"text": "Продавец-кассир",
     "hhtmFromLabel": "rainbow_profession",
     "customDomain": "1",
     "page":0
@@ -29,7 +29,17 @@ def getDB(bdname:str,ip:str="127.0.0.1",port:int=27017):
     client = MongoClient(ip, port)
     return client[bdname]
 
-def parse(pageDOM):
+def readTextfromTag(domElement):
+    if not domElement is None:
+        return domElement.text
+    else:
+        return None
+
+def parse(pageDOM:str):
+
+
+
+
     columnWithVacancy = dom.find("div", attrs={"class": "vacancy-serp"})
     vacancy_items = columnWithVacancy.findAll("div", attrs={"class": "vacancy-serp-item"})
     results_list = []  # list of results
@@ -45,16 +55,17 @@ def parse(pageDOM):
         requirements = item.find("div", attrs={"data-qa": "vacancy-serp__vacancy_snippet_requirement"})
         compensation = item.find("span", attrs={"data-qa": "vacancy-serp__vacancy-compensation"})
 
-        el['vacancyName'] = vacancyName.text
-        el['employer_name'] = employer_name.text
-        el['employer_link'] = url+employer_name.attrs['href']
-        #el['employer_HHid'] = int(employer_name.attrs['href'].split("/")[2])
-
-        el['address'] = address.text
-        el['responsibility'] = responsibility.text
+        el['vacancyName'] = readTextfromTag(vacancyName)
+        el['employer_name'] = readTextfromTag(employer_name)
+        el['address'] = readTextfromTag(address)
+        el['responsibility'] = readTextfromTag(responsibility)
+        el['requirements'] = readTextfromTag(requirements)
 
 
-
+        if not employer_name is None:
+            el['employer_link'] = url+employer_name.attrs['href']
+        else:
+            el['employer_link'] = None
 
         if not compensation is None:
             compensation_text = compensation.text
@@ -81,21 +92,20 @@ def parse(pageDOM):
                     "max": int(compensation_text[2]),
                     "currency": compensation_text[3]
                 }
-            #pprint(el['compensation'])
 
-
-        if requirements is not None:
-             el['requirements'] = requirements.text
-        else:
-             el['requirements'] = None
 
         results_list.append(el)
     return results_list
 
 db=getDB("hhru_vacancy")
 
+vacancy_name = input("Введите имя вакансии:")
+parameters["text"] = vacancy_name
 
-vacancy_collect = db[f"vacancy_collect__{datetime.now()}"]
+
+
+vacancy_collect = db[f"vacancy_collect_for {vacancy_name} in {datetime.now()}"]
+vacancy_collect.insert_one(parameters)
 
 while True:
     result = requests.get(url + "/search/vacancy", params=parameters, headers=headers)
@@ -108,15 +118,19 @@ while True:
     pageNextButton = dom.find("a", attrs={"class": "bloko-button","data-qa":"pager-next"})
     vacancy_list_dict = parse(dom)
 
+
     for vacancy in vacancy_list_dict:
-        vacancy_collect.posts.insert_one(vacancy)
+        vacancy_collect.insert_one(vacancy)
+
 
     if pageNextButton is None:
         break
     parameters['page'] += 1
 
-
-
 #pprint(results_list)
-
-print()
+#({'Date':{"$gte":'ISODate("'date1')"'}}):
+min_compensation = input("Введите значение зарплаты: ")
+items=vacancy_collect.find({'$and':[{'compensation.max':{"$gte":140000}},
+                                    {'compensation.min':{"$gte":140000}}]})
+for item in items:
+    pprint(item)
